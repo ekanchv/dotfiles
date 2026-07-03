@@ -54,20 +54,20 @@ return {
           },
           mappings = {
             i = {
-              -- preview scroll (telescope defaults) + results page-scroll
-              ["<C-d>"] = actions.preview_scrolling_down,
-              ["<C-u>"] = actions.preview_scrolling_up,
-              ["<M-d>"] = actions.results_scrolling_down,
-              ["<M-u>"] = actions.results_scrolling_up,
+              -- results page-scroll (jump up/down the list) + preview scroll
+              ["<C-d>"] = actions.results_scrolling_down,
+              ["<C-u>"] = actions.results_scrolling_up,
+              ["<M-d>"] = actions.preview_scrolling_down,
+              ["<M-u>"] = actions.preview_scrolling_up,
               -- cycle previous prompts (works in current session too)
               ["<C-Up>"] = actions.cycle_history_prev,
               ["<C-Down>"] = actions.cycle_history_next,
             },
             n = {
-              ["<C-d>"] = actions.preview_scrolling_down,
-              ["<C-u>"] = actions.preview_scrolling_up,
-              ["<M-d>"] = actions.results_scrolling_down,
-              ["<M-u>"] = actions.results_scrolling_up,
+              ["<C-d>"] = actions.results_scrolling_down,
+              ["<C-u>"] = actions.results_scrolling_up,
+              ["<M-d>"] = actions.preview_scrolling_down,
+              ["<M-u>"] = actions.preview_scrolling_up,
               ["<C-Up>"] = actions.cycle_history_prev,
               ["<C-Down>"] = actions.cycle_history_next,
             },

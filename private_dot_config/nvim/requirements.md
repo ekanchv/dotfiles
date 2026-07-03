@@ -5,6 +5,7 @@ I'm starting a new neovim config where I want the main structure to resemble the
 - Telescope or something equivalent for searching, fuzzy find files,
     - A window to view and search through marks
     - have a history of previous searches
+    - Add a way to C-u and C-d to jump up and down on the search results quickly
 - Easy navigation that is compatible with tmux
 - Lsp server
 - Debugger with full keybindings
@@ -49,6 +50,7 @@ I'm starting a new neovim config where I want the main structure to resemble the
 - Add `<leader>/` to toggle comment
 - Markdown rendering support with ability to render images, latex equations, and if possible mermaid graph assuming ghostty terminal.
 - Latex editing support that on save will render to a pdf (live updates).
+- Add a spell check that can interpret through snake and camel cases (specifically for programming languages)
 
 ## Running and verification
 - Use `NVIM_APPNAME=nvim_test nvim` to run neovim on the test config
