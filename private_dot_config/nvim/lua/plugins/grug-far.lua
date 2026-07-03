@@ -27,6 +27,8 @@ return {
       },
     },
     opts = {
+      -- open the search buffer in its own tab instead of a split
+      windowCreationCommand = "tabnew",
       -- single editable buffer: type search + replacement, see all matches, apply
       keymaps = {
         replace = { n = "<localleader>r" },

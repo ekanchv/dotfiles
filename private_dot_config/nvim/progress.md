@@ -17,6 +17,7 @@ lua/plugins/lsp.lua       mason, mason-tool-installer, blink.cmp, lspconfig, con
 lua/plugins/dap.lua       nvim-dap + dap-ui + virtual-text + codelldb
 lua/plugins/bufferline.lua tabs for open files in the top bar
 lua/plugins/grug-far.lua  multi-file search & replace (+ session persist)
+lua/plugins/spell.lua     code-aware spell check (camelCase/snake_case split)
 lua/plugins/jupyter.lua   jupytext + molten + image.nvim (notebooks)
 lua/plugins/lean.lua      lean.nvim (Lean 4)
 lua/plugins/coq.lua       Coqtail (Rocq/Coq)
@@ -28,6 +29,17 @@ lua/configs/molten.lua    run-cell / run-all helpers for molten
 ## Requirements coverage
 - **Sessions**: `tpope/vim-obsession`. `<leader>so` toggles; `:Obsession` writes
   `Session.vim`; restore with `nvim -S Session.vim`. `sessionoptions` tuned in options.lua.
+  - **tmux-resurrect bridge** (`lua/autocmds.lua`, group `tmux_nvim_session`): when
+    nvim is launched inside tmux WITHOUT a session (no `-S`, obsession not already
+    tracking), a `VimEnter` autocmd runs `:Obsession` to auto-start tracking
+    `./Session.vim` in the cwd. `~/.tmux.conf` uses resurrect's built-in
+    `@resurrect-strategy-nvim 'session'`, which on restore runs `nvim -S` to load
+    that `./Session.vim` — so plain-launched nvim panes come back too. If launched
+    WITH `-S <file>` / an existing obsession session it's a no-op and that same file
+    is reused. Skips git commit/rebase, scratch/stdin buffers, and non-tmux nvim.
+    NOTE: multiple *plain* nvim panes in the same dir share that dir's `Session.vim`
+    (per-pane differentiation needs the session file in argv, which needed a shell
+    wrapper that was intentionally dropped). Consider gitignoring `Session.vim`.
 - **Package manager**: `lazy.nvim` (auto-bootstraps on first launch).
 - **Fuzzy finder**: Telescope (`<leader>ff/fb/fo/fr`, `<leader>/`). fzf-native sorter.
   `path_display = { "smart" }` shortens the base-directory prefix in results.
@@ -69,13 +81,14 @@ lua/configs/molten.lua    run-cell / run-all helpers for molten
       NOTE: smart_history holds its sqlite connection open, so a search made in the
       *current* session shows up in `<leader>fp` only after a restart; use
       `<C-Up>`/`<C-Down>` to recall same-session searches.
-  - **Scrolling in any picker**: `<C-d>`/`<C-u>` scroll the preview (telescope
-    defaults); `<M-d>`/`<M-u>` page-scroll the results list (added in defaults
-    mappings, insert + normal).
+  - **Scrolling in any picker**: `<C-d>`/`<C-u>` page-scroll the results list (jump
+    up/down through matches quickly); `<M-d>`/`<M-u>` scroll the preview (added in
+    defaults mappings, insert + normal).
   - `/`-search history: `<leader>sh`; `:`-command history: `<leader>sc`.
 - **Tmux nav**: `vim-tmux-navigator`, `<C-h/j/k/l>` across vim splits + tmux panes.
 - **LSP**: native `vim.lsp.enable` — lua_ls, clangd, gopls, pyright, bashls, jq_ls.
-  Keys on attach: `gd gD gi gr K <leader>cr <leader>ca [d ]d`.
+  Keys on attach: `gd gD gi gr K <leader>cr <leader>ca [d ]d`
+  (`<leader>cr` renames via `vim.lsp.buf.rename`).
 - **Debugger**: nvim-dap + dap-ui + codelldb. Full keys: `F5` continue, `F10/F11/F12`
   step over/into/out, `<leader>db` breakpoint, `<leader>du` UI, `<leader>de` eval, etc.
 - **Mason**: `mason-tool-installer` auto-installs servers/formatters/codelldb on start.
@@ -88,7 +101,8 @@ lua/configs/molten.lua    run-cell / run-all helpers for molten
   see all matches, apply everywhere). `<leader>sw` prefills the word under cursor;
   visual `<leader>sr` replaces within the selection. Inside the buffer:
   `<localleader>r` (= `<space>r`) applies the replace; `<localleader>s` syncs edits
-  back. Backed by ripgrep.
+  back. Backed by ripgrep. Opens in its own tab (`windowCreationCommand = "tabnew"`)
+  rather than a split.
   - **History**: persistent by default (grug-far auto-saves to
     `stdpath('state')/grug-far` on replace/sync/buffer-delete). Browse with
     `<localleader>t`, pick an entry with `<CR>` (config makes this explicit in opts).
@@ -173,21 +187,41 @@ lua/configs/molten.lua    run-cell / run-all helpers for molten
   affected directives (`set-lang-from-info-string!`, `set-lang-from-mimetype!`,
   `downcase!`) with array-safe handlers, applied right after the treesitter setup.
   Verified: a markdown file with a ```go fence now parses + highlights cleanly.
+  - The `config` fn `pcall`s `require("nvim-treesitter.configs")`: if a machine has the
+    `main`-branch rewrite checked out instead of the pinned `master` (where that module
+    no longer exists), it notifies to run `:Lazy restore nvim-treesitter` rather than
+    crashing the whole plugin load.
 - **Tabs (top bar)**: `bufferline.nvim` (catppuccin theme via
   `catppuccin.special.bufferline.get_theme()`), `showtabline=2`, offset for NvimTree.
   `]b`/`[b` cycle tabs (BufferLineCycleNext/Prev); `<Tab>` is left unmapped so it
   keeps acting as `<C-i>`/jump-forward. `<leader>x` closes a buffer.
 - **Comment toggle**: `<leader>/` toggles comments using built-in `gc`/`gcc` (normal:
   line, visual: selection). (Telescope's buffer fuzzy-find moved to `<leader>fz`.)
+- **Spell check (code-aware)** (`lua/plugins/spell.lua`): `kamykn/spelunker.vim`.
+  Splits camelCase / snake_case identifiers into sub-words and checks each against
+  the dictionary, so misspellings inside code (e.g. `recieveCount`, `teh_value`) are
+  flagged — native `:set spell` can't, since `_` is a keyword char so snake_case
+  never splits. Native spell highlighting is left off (`spell = false`); spelunker
+  draws its own `matchadd` highlights. `check_type = 2` (only the displayed window,
+  fast on big files); URIs / emails / `@handles` / ACRONYMS / `` `backquoted` `` skipped;
+  fragments under 4 chars ignored. Keys: `Zl` correct word under cursor, `ZL` correct
+  all occurrences, `Zg` add word to dictionary, `Zw` mark as wrong, `<leader>uz`
+  toggle on/off (via `spelunker#toggle#toggle`, which also clears its matches —
+  `Z`-prefix chosen since only `ZZ`/`ZQ` are native). VERIFIED: plugin installs,
+  autoload functions resolve, `spelunker#check` runs on a code buffer, toggle flips
+  the flag (1↔0) and mappings are set, all with no startup error.
 - **Save**: `<C-s>` writes the buffer in normal/insert/visual mode.
 - **Theme**: catppuccin (mocha) with transparency, matching old `chadrc`.
   lualine theme is `catppuccin-mocha` (catppuccin has no plain `catppuccin` theme).
-- **File tree**: `nvim-tree` (`<C-n>` toggle, `<leader>e` focus). Long names that
-  overflow the tree width can be scrolled to horizontally — inside the tree:
-  `l` scrolls right half a width, `h` scrolls left, `<End>`/`<Home>` jump to the end/
-  start of the name. (`h`/`l` are unused by nvim-tree defaults; arrows/<C-arrows>
-  were avoided since terminals/tmux often intercept them.) Tree window uses
-  `nowrap` + `sidescrolloff=0` + `virtualedit=all`, global `sidescroll=1`.
+- **File tree**: `nvim-tree` (`<C-n>` toggle, `<leader>e` focus). `update_focused_file`
+  is enabled (with `update_root`): switching buffers and focusing the tree jumps to and
+  highlights the current file (changing the tree root if the file lives outside it).
+  Long names that overflow the tree width can be scrolled to horizontally — inside the
+  tree: `<M-l>` scrolls right half a width, `<M-h>` scrolls left, `<End>`/`<Home>` jump
+  to the end/start of the name. (plain `h`/`l` keep nvim-tree's defaults
+  collapse/expand; arrows/<C-arrows> were avoided since terminals/tmux often intercept
+  them.) Tree window uses `nowrap` + `sidescrolloff=0` + `virtualedit=all`, global
+  `sidescroll=1`.
   - `virtualedit=all` is REQUIRED: without it, zl/zh refuse to scroll while the
     cursor is on a short entry (Vim keeps the cursor on screen). Set via
     `vim.schedule` in on_attach because nvim-tree overwrites window opts post-attach.

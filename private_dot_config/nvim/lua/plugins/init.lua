@@ -147,10 +147,12 @@ return {
 			require("nvim-tree").setup({
 				view = { preserve_window_proportions = true },
 				-- Jump to & highlight the current buffer's file in the tree whenever
-				-- focus moves to nvim-tree (and on buffer switches).
+				-- focus moves to nvim-tree (and on buffer switches). update_root is
+				-- OFF so the tree keeps its root instead of re-rooting to the focused
+				-- file's parent directory (which would hide the rest of the tree).
 				update_focused_file = {
 					enable = true,
-					update_root = true,
+					update_root = false,
 				},
 				on_attach = function(bufnr)
 					local api = require("nvim-tree.api")
