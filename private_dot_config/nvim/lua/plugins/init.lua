@@ -83,14 +83,18 @@ return {
 		opts = {},
 	},
 
-	-- Treesitter (frozen master branch + 0.12 compat shim)
 	{
 		"nvim-treesitter/nvim-treesitter",
-		branch = "master",
-		build = ":TSUpdate",
+		lazy = false,
+		dev = false,
+		branch = "main",
+		run = ":TSUpdate",
 		event = { "BufReadPre", "BufNewFile" },
-		opts = {
-			ensure_installed = {
+		config = function()
+			local ts = require("nvim-treesitter")
+			---@diagnostic disable-next-line: missing-fields
+			ts.setup({})
+			ts.install({
 				"lua",
 				"vim",
 				"vimdoc",
@@ -105,32 +109,7 @@ return {
 				"markdown_inline",
 				"latex",
 				"html",
-			},
-			highlight = {
-				enable = true,
-				-- VimTeX owns .tex highlighting/conceal
-				disable = { "latex" },
-			},
-			indent = { enable = true },
-		},
-		config = function(_, opts)
-			-- This config targets the `master` branch API. If a machine somehow has
-			-- the `main`-branch rewrite checked out (its default branch), the classic
-			-- `nvim-treesitter.configs` module is gone — fail loudly with a fix hint
-			-- instead of crashing the whole config load.
-			local ok, configs = pcall(require, "nvim-treesitter.configs")
-			if not ok then
-				vim.schedule(function()
-					vim.notify(
-						"nvim-treesitter is on the wrong branch (expected `master`).\n"
-							.. "Run `:Lazy restore nvim-treesitter` to sync it to the pinned commit.",
-						vim.log.levels.ERROR
-					)
-				end)
-				return
-			end
-			configs.setup(opts)
-			require("configs.treesitter_fix")
+			})
 		end,
 	},
 
