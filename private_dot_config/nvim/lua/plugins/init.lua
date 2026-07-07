@@ -20,6 +20,12 @@ return {
 				blink_cmp = true,
 				native_lsp = { enabled = true },
 			},
+			custom_highlights = function(colors)
+				return {
+					-- Colored split boundary between windows (no size change, just color)
+					WinSeparator = { fg = colors.blue },
+				}
+			end,
 		},
 		config = function(_, opts)
 			require("catppuccin").setup(opts)

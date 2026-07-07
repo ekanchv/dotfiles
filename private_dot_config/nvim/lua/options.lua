@@ -21,6 +21,9 @@ opt.hlsearch = true
 opt.splitright = true
 opt.splitbelow = true
 
+-- thin single-column split boundary, colored via WinSeparator highlight
+opt.fillchars:append({ vert = "│", horiz = "─", horizup = "┴", horizdown = "┬", vertleft = "┤", vertright = "├", verthoriz = "┼" })
+
 opt.termguicolors = true
 opt.mouse = "a"
 opt.clipboard = "unnamedplus"
