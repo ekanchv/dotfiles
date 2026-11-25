@@ -6,11 +6,15 @@
 #   ./install.sh --gui        # headless + GUI, no prompt
 #   ./install.sh --headless   # headless only, no prompt
 #
+# DOTFILES_REF=<branch> picks the dotfiles branch to install (default: main).
 # Safe to re-run: every step skips work that is already done at the pinned version.
 # Lives in the dotfiles repo under setup/ (excluded from chezmoi via .chezmoiignore).
 set -euo pipefail
 
 DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/esh-k/dotfiles.git}"
+# The one knob for installing another branch: used for the bootstrap clone, to switch
+# an existing clone (so leaving it unset moves a machine back to main), and by
+# `chezmoi init` in install_chezmoi.
 DOTFILES_REF="${DOTFILES_REF:-main}"
 SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 
@@ -19,6 +23,8 @@ SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)
 if [[ -z "$SETUP_DIR" || ! -f "$SETUP_DIR/lib/common.sh" ]]; then
     source_dir="$HOME/.local/share/chezmoi"
     if [[ -d "$source_dir/.git" ]]; then
+        git -C "$source_dir" fetch --quiet origin
+        git -C "$source_dir" switch --quiet "$DOTFILES_REF"
         git -C "$source_dir" pull --ff-only
     else
         command -v git >/dev/null || { sudo apt-get update && sudo apt-get install -y git; }
@@ -38,7 +44,7 @@ for arg in "$@"; do
         --gui) INSTALL_GUI=yes ;;
         --headless) INSTALL_GUI=no ;;
         -h | --help)
-            sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) die "unknown argument: $arg" ;;

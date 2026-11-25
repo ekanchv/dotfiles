@@ -30,8 +30,18 @@ which `.bashrc` sources.
 - `lib/headless.sh`, `lib/gui.sh`: one function per tool
 - `test/run.sh --headless|--gui`: install into a fresh Ubuntu container, then run `test/verify.sh`, which exercises each tool (`PLATFORM=linux/amd64` to emulate x86)
 
-To test a branch before merging:
+## Installing from a branch
+
+`DOTFILES_REF` (default `main`) is the only setting for this. Keep the URL on `main`:
+the installer clones `DOTFILES_REF` and runs that branch's copy of `setup/`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ekanchv/dotfiles/<branch>/setup/install.sh | DOTFILES_REF=<branch> bash
+curl -fsSL https://raw.githubusercontent.com/esh-k/dotfiles/main/setup/install.sh | DOTFILES_REF=<branch> bash
 ```
+
+The machine then stays on that branch, and `chezmoi update` follows it. Re-run the
+curl command without `DOTFILES_REF` to switch it back to `main`. Running
+`setup/install.sh` from an existing checkout uses that checkout's branch.
+
+In the container test, `DOTFILES_REF=<branch> test/run.sh --headless` applies that
+branch's dotfiles; the `setup/` scripts always come from the local checkout.

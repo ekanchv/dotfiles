@@ -75,7 +75,7 @@ install_chezmoi() {
             warn "chezmoi skipped locally modified files; run 'chezmoi diff' to review"
     else
         # --force: replace Ubuntu's stock ~/.bashrc etc. without prompting.
-        chezmoi init --apply --force "$DOTFILES_REPO"
+        chezmoi init --apply --force --branch "$DOTFILES_REF" "$DOTFILES_REPO"
     fi
 }
 
