@@ -2,11 +2,11 @@
 
 install_headless() {
     install_apt_packages
+    resolve_versions
     install_chezmoi
     install_pyenv
     install_neovim_venv
     install_neovim
-    install_tmux
     install_node
     install_go
     install_rust
@@ -14,7 +14,7 @@ install_headless() {
     install_quarto
     install_utftex
     install_lean
-    install_just
+    install_rocq
     install_bazel
     install_brew
     bootstrap_neovim
@@ -40,21 +40,23 @@ install_apt_packages() {
     apt_install \
         git build-essential cmake pkg-config autoconf automake libtool gettext \
         unzip xz-utils file less locales sudo procps \
-        ripgrep fd-find fzf jq imagemagick luarocks \
+        ripgrep fd-find fzf jq tree colordiff imagemagick ffmpeg luarocks \
+        tmux just kitty docker.io docker-buildx \
         `# cairosvg (molten svg output) loads libcairo at runtime` \
         libcairo2 \
         `# pyenv python build deps` \
         libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
         tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev \
-        `# tmux build deps` \
-        libevent-dev libncurses-dev bison \
-        `# rocq/coq for Coqtail` \
-        coq \
+        libncurses-dev \
+        `# opam for rocq + iris (install_rocq): gmp for zarith, bubblewrap for opam's build sandbox` \
+        opam bubblewrap libgmp-dev \
         `# mason has no linux-arm64 clangd/clang-format, so use the distro ones` \
         clangd clang-format
 
     # Ubuntu ships fd as `fdfind`; telescope looks for `fd`.
     [[ -e /usr/local/bin/fd ]] || $SUDO ln -s "$(command -v fdfind)" /usr/local/bin/fd
+    # Run docker without sudo (takes effect on next login).
+    [[ $EUID -eq 0 ]] || $SUDO usermod -aG docker "$(id -un)"
     info "$(git --version)"
 }
 
@@ -88,6 +90,11 @@ install_pyenv() {
     fi
     export PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 
+    # "latest" or a prefix like "3.13" -> newest matching CPython release pyenv knows.
+    if [[ ! "$PYTHON_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        PYTHON_VERSION="$(pyenv latest --known "${PYTHON_VERSION/latest/3}")"
+        info "python -> $PYTHON_VERSION"
+    fi
     pyenv install --skip-existing "$PYTHON_VERSION"
     pyenv global "$PYTHON_VERSION"
     info "$(python --version)"
@@ -117,20 +124,6 @@ install_neovim() {
     $SUDO mkdir -p /opt/nvim
     $SUDO tar -xzf "$tarball" -C /opt/nvim --strip-components=1
     $SUDO ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
-}
-
-install_tmux() {
-    log "tmux $TMUX_VERSION (from source)"
-    if has_version tmux "tmux $TMUX_VERSION" -V; then
-        info "already installed"
-        return
-    fi
-    local tarball dir
-    tarball="$(fetch "https://github.com/tmux/tmux/releases/download/$TMUX_VERSION/tmux-$TMUX_VERSION.tar.gz")"
-    dir="$(dirname "$tarball")"
-    tar -xzf "$tarball" -C "$dir"
-    (cd "$dir/tmux-$TMUX_VERSION" && ./configure --prefix=/usr/local >/dev/null && make -j"$(nproc)" >/dev/null)
-    $SUDO make -C "$dir/tmux-$TMUX_VERSION" install >/dev/null
 }
 
 # Node: mason's npm-based servers (pyright, bash-language-server) + markdown-preview.
@@ -230,16 +223,43 @@ install_lean() {
         sh -s -- -y --default-toolchain stable --no-modify-path
 }
 
-install_just() {
-    log "just $JUST_VERSION"
-    if has_version just "just $JUST_VERSION"; then
-        info "already installed"
-        return
+# opam package spec: "name.version", or just "name" (newest) when version is "latest".
+opam_pkg() { [[ "$2" == latest ]] && echo "$1" || echo "$1.$2"; }
+
+# Rocq + Iris via opam, in opam's global switch "default". coqide-server provides the
+# coqidetop that Coqtail drives. No shell hook (--no-setup): `opamswitch default` (from
+# .bash_aliases) puts it on PATH, and Coqtail finds the switch itself (nvim coq.lua).
+install_rocq() {
+    log "rocq $ROCQ_VERSION + iris ${IRIS_VERSION:-(skipped)} (opam switch default, ocaml $OCAML_VERSION)"
+    export OPAMYES=1 OPAMCONFIRMLEVEL=unsafe-yes
+    if [[ ! -f "$HOME/.opam/config" ]]; then
+        # bubblewrap can't create namespaces in an unprivileged container (test/run.sh),
+        # and some hosts restrict user namespaces too; build unsandboxed there.
+        if [[ -f /.dockerenv ]]; then
+            opam init --bare --no-setup --disable-sandboxing
+        elif ! opam init --bare --no-setup; then
+            warn "opam's bubblewrap sandbox doesn't work here; initialising without it"
+            opam init --reinit --bare --no-setup --disable-sandboxing
+        fi
     fi
-    local triple tarball
-    case "$ARCH_DEB" in amd64) triple=x86_64 ;; arm64) triple=aarch64 ;; esac
-    tarball="$(fetch "https://github.com/casey/just/releases/download/$JUST_VERSION/just-$JUST_VERSION-$triple-unknown-linux-musl.tar.gz")"
-    $SUDO tar -xzf "$tarball" -C /usr/local/bin just
+    if ! opam switch list --short 2>/dev/null | grep -qx default; then
+        opam switch create default "$(opam_pkg ocaml-base-compiler "$OCAML_VERSION")"
+    fi
+    # Iris is published in the Rocq repo, not opam's default one.
+    opam repo list --switch=default --short | grep -qx rocq-released ||
+        opam repo add --switch=default --this-switch rocq-released https://rocq-prover.org/opam/released
+
+    local pkgs=(
+        "$(opam_pkg rocq-core "$ROCQ_VERSION")"
+        "$(opam_pkg coqide-server "$ROCQ_VERSION")"
+        rocq-stdlib
+    )
+    if [[ -n "$IRIS_VERSION" ]]; then
+        pkgs+=("$(opam_pkg rocq-iris "$IRIS_VERSION")" "$(opam_pkg rocq-iris-heap-lang "$IRIS_VERSION")")
+    fi
+    # Already-installed versions are a no-op; changed pins upgrade/downgrade in place.
+    opam install --switch=default "${pkgs[@]}"
+    info "$(opam exec --switch=default -- rocq --version | head -n 1)"
 }
 
 # bazelisk installed as `bazel`: each repo's .bazelversion picks the bazel release.

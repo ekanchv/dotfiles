@@ -10,12 +10,19 @@ The headless layer always installs; you're asked whether to add the GUI layer.
 Skip the prompt with `bash -s -- --headless` or `bash -s -- --gui`. Re-running is
 safe and upgrades anything whose pinned version changed.
 
-| Layer | Installs |
-|---|---|
-| headless | git (git-core PPA), build tools, cmake (Kitware), chezmoi + these dotfiles, pyenv + Python, neovim (+ plugins, mason tools, python venv), tmux (+ tpm plugins), node, go, rust, tree-sitter CLI, quarto, utftex, coq, lean, just, bazel (bazelisk), homebrew |
-| GUI | Chrome (amd64 only), kitty, Ghostty, JetBrainsMono Nerd Font, LaTeX + zathura, clipboard tools |
+| Layer | From apt | From upstream releases (`versions.env`) |
+|---|---|---|
+| headless | git (git-core PPA), curl, build tools, cmake (Kitware), ripgrep, fd, fzf, jq, tree, colordiff, ffmpeg, imagemagick, tmux, just, kitty, docker + buildx, opam, clangd | chezmoi + these dotfiles, pyenv + Python, neovim (+ plugins, mason tools, python venv), node, go, tree-sitter CLI, quarto, bazel (bazelisk), rust (rustup), lean (elan), rocq + coqide-server + iris (opam), homebrew, utftex |
+| GUI | LaTeX + zathura, clipboard tools | Chrome (amd64 only), Ghostty, JetBrainsMono Nerd Font |
 
-Versions are pinned in [`versions.env`](versions.env).
+Tools are installed with apt unless Ubuntu's version is too old for the dotfiles
+or isn't packaged. Upstream versions are pinned in [`versions.env`](versions.env);
+set any of them to `latest` to take the newest release instead.
+
+Rocq and Iris go into opam's global switch `default`, without opam's shell hook:
+run `opamswitch default` (from `.bash_aliases`) to put them on PATH in a shell.
+Neovim's Coqtail finds the switch by itself. Lean is on PATH through `~/.elan/env`,
+which `.bashrc` sources.
 
 ## Layout
 

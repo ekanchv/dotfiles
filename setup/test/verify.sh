@@ -7,7 +7,10 @@ set -uo pipefail
 
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$HOME/.local/bin:$PYENV_ROOT/shims:$PYENV_ROOT/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/home/linuxbrew/.linuxbrew/bin:$PATH"
+# Same as `opamswitch default` in a shell: rocq/iris live in opam's global switch.
+export PATH="$HOME/.opam/default/bin:$PATH"
 SETUP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "$SETUP_DIR/versions.env"
 VENV="$HOME/.virtualenvs/neovim"
 LAZY="$HOME/.local/share/nvim/lazy"
 WORK="$(mktemp -d)"
@@ -32,6 +35,9 @@ section() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 section "shell"
 check "login shell finds pyenv, nvim, tmux, go, node" \
     'bash -ic "command -v pyenv nvim tmux go node cargo lean" 2>/dev/null | wc -l | grep -qx 7'
+# The check above inherits this script's PATH; this one starts from a clean env.
+check "fresh interactive bash finds lean (.bashrc sources ~/.elan/env)" \
+    'env -i HOME="$HOME" TERM=dumb bash -ic "command -v lean" 2>/dev/null | grep -q "/.elan/bin/lean"'
 
 section "python"
 check "python stdlib modules built (ssl sqlite3 bz2 lzma readline ctypes tkinter)" \
@@ -76,11 +82,19 @@ printf 'package main\nfunc main() {}\n' >t.go
 printf 'module t\n\ngo 1.26\n' >go.mod
 printf 'local x = 1\n' >t.lua
 printf 'echo hi\n' >t.sh
-for pair in t.py:pyright t.c:clangd t.go:gopls t.lua:lua_ls t.sh:bashls t.py:cspell_ls; do
+printf 'theorem t : 1 + 1 = 2 := rfl\n' >t.lean
+for pair in t.py:pyright t.c:clangd t.go:gopls t.lua:lua_ls t.sh:bashls t.py:cspell_ls t.lean:leanls; do
     file="${pair%%:*}" server="${pair##*:}"
     check "LSP $server attaches to $file" \
         "nvim --headless $file '+lua local ok = vim.wait(30000, function() return #vim.lsp.get_clients({bufnr=0, name=\"$server\"}) > 0 end, 200) vim.cmd(ok and \"qa!\" or \"cquit 1\")'"
 done
+
+# Coqtail with opam *off* PATH, as when nvim is launched from a plain shell: coq.lua
+# must find coqidetop in opam's global switch by itself.
+printf 'Theorem t : 1 + 1 = 2.\nProof. reflexivity. Qed.\n' >t.v
+NO_OPAM_PATH="$(printf %s "$PATH" | tr : '\n' | grep -v '/\.opam/' | paste -sd: -)"
+check "Coqtail starts Rocq (coqidetop found without opam on PATH)" \
+    "PATH='$NO_OPAM_PATH' nvim --headless t.v +RocqStart '+lua local ok = vim.wait(30000, function() for _, b in ipairs(vim.api.nvim_list_bufs()) do if vim.bo[b].filetype == \"coq-infos\" and table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false)):find(\"Rocq %d\") then return true end end end, 200) vim.cmd(ok and \"qa!\" or \"cquit 1\")'"
 
 printf 'local   x =   1\n' >fmt.lua
 check "conform formats on save (stylua)" \
@@ -116,13 +130,24 @@ check "cargo builds and runs" 'cargo new -q rs && cd rs && cargo run -q | grep -
 check "node runs" 'node -e "console.log(6*7)" | grep -qx 42'
 check "brew installs a formula" 'brew install -q hello >/dev/null && hello | grep -q "Hello, world"'
 check "git clone works (https)" 'git clone -q --depth 1 https://github.com/tmux-plugins/tpm tpm-clone'
+check "apt CLI extras present (tree colordiff ffmpeg just kitty)" \
+    'tree --version && colordiff --version && ffmpeg -version && just --version && kitty --version'
+check "docker CLI + buildx plugin" 'docker --version && docker buildx version'
 check "rg / fd / fzf work" 'rg -q hello hello.c && fd -q hello.c && echo a | fzf -f a | grep -qx a'
 
 section "notebook / docs tooling"
 check "quarto renders a document" 'printf -- "---\ntitle: t\n---\n\nquarto-ok\n" >q.qmd && quarto render q.qmd --to html --quiet && grep -q quarto-ok q.html'
 check "utftex renders LaTeX" 'utftex "\\frac{a}{b}" | grep -q "─"'
 check "imagemagick converts" 'convert -size 10x10 xc:red r.png && file r.png | grep -q PNG'
-check "rocq/coq checks a proof" 'printf "Theorem t : 1 + 1 = 2.\nProof. reflexivity. Qed.\n" >t.v && coqc t.v'
+check "rocq (opam) checks a proof" 'printf "Theorem t : 1 + 1 = 2.\nProof. reflexivity. Qed.\n" >t.v && rocq compile t.v'
+if [[ -n "$IRIS_VERSION" ]]; then
+    cat >iris_t.v <<'EOF'
+From iris.proofmode Require Import proofmode.
+Lemma sep_comm {PROP : bi} (P Q : PROP) : P ∗ Q ⊢ Q ∗ P.
+Proof. iIntros "[HP HQ]". iFrame. Qed.
+EOF
+    check "iris proof mode checks a proof" 'rocq compile iris_t.v'
+fi
 check "lean checks a proof" 'printf "theorem t : 1 + 1 = 2 := rfl\n" >t.lean && lean t.lean'
 
 section "dotfiles"

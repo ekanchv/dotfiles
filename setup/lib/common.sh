@@ -52,3 +52,43 @@ fetch() {
     curl -fsSL --retry 3 -o "$dir/${url##*/}" "$url"
     echo "$dir/${url##*/}"
 }
+
+# Newest release tag of a GitHub repo (without a leading "v"), read from the
+# /releases/latest redirect so it doesn't count against the API rate limit.
+github_latest() {
+    local url
+    url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$1/releases/latest")"
+    url="${url##*/}"
+    echo "${url#v}"
+}
+
+# Newest stable Node release (the index also lists alpha/rc builds).
+node_latest() {
+    curl -fsSL https://nodejs.org/dist/index.json |
+        jq -r '[.[].version | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))][0] | ltrimstr("v")'
+}
+go_latest() { curl -fsSL 'https://go.dev/VERSION?m=text' | sed -n '1s/^go//p'; }
+
+# If $var is "latest", replace it with the output of the given command.
+pin_latest() {
+    local var="$1" value
+    shift
+    [[ "${!var}" == latest ]] || return 0
+    value="$("$@")" && [[ -n "$value" ]] || die "could not resolve latest $var"
+    printf -v "$var" '%s' "$value"
+    info "$var -> $value"
+}
+
+# Resolve any "latest" in versions.env (PYTHON_VERSION is resolved by pyenv itself).
+resolve_versions() {
+    log "versions"
+    pin_latest CHEZMOI_VERSION github_latest twpayne/chezmoi
+    pin_latest PYENV_VERSION github_latest pyenv/pyenv
+    pin_latest NEOVIM_VERSION github_latest neovim/neovim
+    pin_latest NODE_VERSION node_latest
+    pin_latest GO_VERSION go_latest
+    pin_latest TREE_SITTER_VERSION github_latest tree-sitter/tree-sitter
+    pin_latest QUARTO_VERSION github_latest quarto-dev/quarto-cli
+    pin_latest BAZELISK_VERSION github_latest bazelbuild/bazelisk
+    pin_latest GHOSTTY_DEB_TAG github_latest mkasberg/ghostty-ubuntu
+}
