@@ -127,3 +127,6 @@ bind-key -n C-h if-shell -F "#{m/r:#{@vim_pane_pattern},#{pane_current_command}}
 bind-key -n C-j if-shell -F "#{m/r:#{@vim_pane_pattern},#{pane_current_command}}" "send-keys C-j" "select-pane -D"
 bind-key -n C-k if-shell -F "#{m/r:#{@vim_pane_pattern},#{pane_current_command}}" "send-keys C-k" "select-pane -U"
 bind-key -n C-l if-shell -F "#{m/r:#{@vim_pane_pattern},#{pane_current_command}}" "send-keys C-l" "select-pane -R"
+
+# Fuzzy-search all panes by title (Claude session names), command, or path.
+bind F display-popup -E -w 90% -h 70% "~/.tmux/pane-search.sh"

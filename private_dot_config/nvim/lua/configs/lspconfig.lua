@@ -35,7 +35,10 @@ vim.api.nvim_create_autocmd("LspAttach", {
 		m("gD", vim.lsp.buf.declaration, "goto declaration")
 		m("gi", vim.lsp.buf.implementation, "goto implementation")
 		m("gr", vim.lsp.buf.references, "references")
-		m("K", vim.lsp.buf.hover, "hover")
+		-- lean.nvim provides an interactive hover on K (lua/plugins/lean.lua)
+		if vim.bo[ev.buf].filetype ~= "lean" then
+			m("K", vim.lsp.buf.hover, "hover")
+		end
 		m("<leader>cr", vim.lsp.buf.rename, "rename")
 		m("<leader>ca", vim.lsp.buf.code_action, "code action", { "n", "v" })
 		m("[d", function()

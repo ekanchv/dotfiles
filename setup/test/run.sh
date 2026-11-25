@@ -5,17 +5,20 @@
 #   test/run.sh --gui
 #   test/run.sh --gui --verify-only   # reuse the last snapshot, only re-run verify.sh
 #   PLATFORM=linux/amd64 test/run.sh --gui   # emulate another architecture
+#   DOTFILES_REF=<branch> test/run.sh --headless   # apply that branch's dotfiles
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 mode="${1:---headless}"
 platform=(${PLATFORM:+--platform "$PLATFORM"})
+# setup/ always comes from this checkout; DOTFILES_REF picks the dotfiles chezmoi applies.
+ref=(${DOTFILES_REF:+-e "DOTFILES_REF=$DOTFILES_REF"})
 if [[ "${2:-}" != --verify-only ]]; then
     docker build "${platform[@]}" -q -f test/Dockerfile -t machine-setup-test . >/dev/null
     # Drop the previous snapshot first; each one is several GB.
     docker rm -f machine-setup-run >/dev/null 2>&1 || true
     docker rmi machine-setup-installed >/dev/null 2>&1 || true
-    docker run "${platform[@]}" --name machine-setup-run machine-setup-test \
+    docker run "${platform[@]}" "${ref[@]}" --name machine-setup-run machine-setup-test \
         bash -c "./setup/install.sh $mode && ./setup/install.sh $mode >/dev/null"
     docker commit machine-setup-run machine-setup-installed >/dev/null
     docker rm machine-setup-run >/dev/null
